@@ -8,9 +8,29 @@ ROOT=$(unset CDPATH && cd $(dirname "${BASH_SOURCE[0]}")/.. && pwd)
 cd $ROOT
 source $ROOT/hack/lib.sh
 
-hosts=$(kubectl get nodes -ojsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')
+function usage() {
+    local name=$(basename $0)
+    printf "Usage: %s [options] <hostpattern> <scriptfile>\n" $name
+    printf "\n"
+    printf "Examples:\n"
+    printf "  %s all scripts/kubeletversion.sh\n" $name
+    printf "  %s jq3 scripts/kubeletversion.sh\n" $name
+}
 
-script=$ROOT/$1
+while getopts "h?" opt; do
+    case "$opt" in
+        h|\?)
+            usage
+            exit 0
+            ;;
+    esac
+done
+
+shift $((OPTIND-1))
+[ "$1" = "--" ] && shift
+
+hostpattern=$1
+script=$ROOT/$2
 
 if [ ! -e "$script" ]; then
     echo "error: $script not found"
@@ -22,7 +42,5 @@ $ROOT/hack/gen-ansible-inventory.sh > $INVENTORY
 
 src=$script
 dst=/tmp/ansbile.script.$$
-for h in $hosts; do
-    ansible -i $INVENTORY $h -m copy -a "src=$src dest=$dst"
-    ansible -i $INVENTORY $h -m shell -a "bash $dst"
-done
+ansible -f 5 -i $INVENTORY $hostpattern -m copy -a "src=$src dest=$dst"
+ansible -f 1 -i $INVENTORY $hostpattern -m shell -a "bash $dst"
